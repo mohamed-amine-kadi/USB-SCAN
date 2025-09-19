@@ -1,3 +1,4 @@
+# Bibliothèque standard pour ouvrir un navigateur par défaut
 import webbrowser
 
 # Liste pour stocker les réponses
@@ -67,3 +68,4 @@ with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
 
 # Ouvrir le fichier dans le navigateur
 webbrowser.open("reponses_utilisateur.html")
+
