@@ -1,5 +1,7 @@
-# Bibliothèque standard pour ouvrir un navigateur par défaut
 import webbrowser
+from datetime import datetime
+# Obtenir la date et l'heure actuelles
+maintenant = datetime.now()
 
 # Liste pour stocker les réponses
 reponses_utilisateur = []
@@ -19,7 +21,7 @@ while continu:
     # Stocker la réponse
     reponses_utilisateur.append({"nom": nom, "reponse": reponse})
 
-    if reponse != "oui":
+    if reponse == "non":
         continu = False
         print("Au revoir !")
 
@@ -43,6 +45,9 @@ contenu_html = """
         <tr>
             <th>Nom</th>
             <th>Réponse</th>
+            <th>date</th>
+            <th>heure</th>
+            <th>zone</th>
         </tr>
 """
 
@@ -52,6 +57,9 @@ for reponse in reponses_utilisateur:
         <tr>
             <td>{reponse['nom']}</td>
             <td>{reponse['reponse']}</td>
+            <td>{maintenant.strftime("%d/%m/%Y")}</td>
+            <td>{maintenant.strftime("%H:%M:%S")}</td>
+            <td>{maintenant.astimezone()}</td>
         </tr>
     """
 
@@ -68,4 +76,3 @@ with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
 
 # Ouvrir le fichier dans le navigateur
 webbrowser.open("reponses_utilisateur.html")
-
