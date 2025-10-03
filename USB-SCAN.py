@@ -11,6 +11,8 @@ continu = True
 while continu:
     # Demander le nom de l'utilisateur
     nom = input("Quel est votre nom ? ")
+    prénom = input("Quel est votre prénom ?")
+
 
     # Afficher le message de bienvenue
     print(f"Bonjour, {nom} !")
@@ -76,3 +78,4 @@ with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
 
 # Ouvrir le fichier dans le navigateur
 webbrowser.open("reponses_utilisateur.html")
+
