@@ -21,7 +21,8 @@ while continu:
     reponse = input("Souhaitez-vous continuer ? (oui/non) ").strip().lower()
 
     # Stocker la réponse
-    reponses_utilisateur.append({"nom": nom, "reponse": reponse})
+    reponses_utilisateur.append({"nom": nom, "prénom": prénom, "reponse": reponse})
+
 
     if reponse == "non":
         continu = False
@@ -80,6 +81,7 @@ with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
 
 # Ouvrir le fichier dans le navigateur
 webbrowser.open("reponses_utilisateur.html")
+
 
 
 
