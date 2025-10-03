@@ -11,17 +11,18 @@ reponses_utilisateur = []
 continu = True
 
 while continu:
-    # Demander le nom de l'utilisateur
+    # Demander le prénom et le nom de l'utilisateur
+    prenom = input("Quel est votre prénom ? ")
     nom = input("Quel est votre nom ? ")
 
     # Afficher le message de bienvenue
-    print(f"Bonjour, {nom} !")
+    print(f"Bonjour, {prenom} {nom} !")
 
     # Demander si l'utilisateur souhaite continuer
     reponse = input("Souhaitez-vous continuer ? (oui/non) ").strip().lower()
 
     # Stocker la réponse
-    reponses_utilisateur.append({"nom": nom, "reponse": reponse})
+    reponses_utilisateur.append({"prenom": prenom, "nom": nom, "reponse": reponse})
 
     if reponse == "non":
         continu = False
@@ -36,7 +37,7 @@ contenu_html = """
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         h1 { color: #333; }
-        table { border-collapse: collapse; width: 50%; }
+        table { border-collapse: collapse; width: 70%; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
     </style>
@@ -45,6 +46,7 @@ contenu_html = """
     <h1>Historique des réponses</h1>
     <table>
         <tr>
+            <th>Prénom</th>
             <th>Nom</th>
             <th>Réponse</th>
             <th>Date</th>
@@ -53,9 +55,11 @@ contenu_html = """
         </tr>
 """
 
+# Ajouter les réponses au HTML
 for reponse in reponses_utilisateur:
     contenu_html += f"""
         <tr>
+            <td>{reponse['prenom']}</td>
             <td>{reponse['nom']}</td>
             <td>{reponse['reponse']}</td>
             <td>{maintenant.strftime("%d/%m/%Y")}</td>
@@ -64,6 +68,7 @@ for reponse in reponses_utilisateur:
         </tr>
     """
 
+# Fermer le HTML
 contenu_html += """
     </table>
 </body>
@@ -74,8 +79,6 @@ contenu_html += """
 with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
     fichier.write(contenu_html)
 
-# Obtenir le chemin absolu
-fichier_path = os.path.abspath("reponses_utilisateur.html")
-
-# Ouvrir le fichier dans le navigateur
-webbrowser.open(f"file://{fichier_path}")
+# Ouvrir le fichier dans le navigateur avec chemin absolu
+chemin_fichier = os.path.abspath("reponses_utilisateur.html")
+webbrowser.open(f"file://{chemin_fichier}")
