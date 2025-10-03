@@ -45,3 +45,9 @@ def collect_info_linux():
         ("lsusb -v (détails) — peut nécessiter sudo", ["lsusb", "-v"]),
         ("dmesg | grep -i usb (messages noyau)", ["bash", "-lc", "dmesg | grep -i usb || true"]),
         ("lshw -class usb (détails matériels) — peut nécessiter sudo", ["bash", "-]()
+
+                                                                        chemin = os.path.abspath(out_file)
+webbrowser.open_new_tab(f"file://{chemin}")
+print(f"Rapport écrit dans : {chemin}")
+input("Appuyez sur Entrée pour quitter...")
+
