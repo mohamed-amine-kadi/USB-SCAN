@@ -15,7 +15,8 @@ while continu:
 
 
     # Afficher le message de bienvenue
-    print(f"Bonjour, {nom} !")
+    print(f"D'accord ton nom de famille est {nom} !")
+    print(f"D'accord, ton prenom est {prénom} et ton nom est {nom} !")
 
     # Demander si l'utilisateur souhaite continuer
     reponse = input("Souhaitez-vous continuer ? (oui/non) ").strip().lower()
@@ -78,4 +79,5 @@ with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
 
 # Ouvrir le fichier dans le navigateur
 webbrowser.open("reponses_utilisateur.html")
+
 
