@@ -47,7 +47,7 @@ contenu_html = """
     <table>
         <tr>
             <th>Nom</th>
-            <th>prénom</th>
+            <th>Prénom</th>
             <th>Réponse</th>
             <th>date</th>
             <th>heure</th>
@@ -81,6 +81,7 @@ with open("reponses_utilisateur.html", "w", encoding="utf-8") as fichier:
 
 # Ouvrir le fichier dans le navigateur
 webbrowser.open("reponses_utilisateur.html")
+
 
 
 
