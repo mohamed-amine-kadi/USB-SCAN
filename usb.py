@@ -127,6 +127,7 @@ def scan_macos():
 
 def scan_windows():
     results = []
+    print("début test USB")
     if HAS_WMI:
         try:
             c = wmi.WMI()
