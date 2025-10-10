@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
-USB-SCAN — Scan des périphériques USB et génération d'un rapport HTML.
-Fonctionne sur Linux / Windows / macOS avec diverses méthodes (pyusb, commandes système).
+USB-SCAN — Scan des périphériques USB et génération d'un rapport HTML enrichi.
+Ajout : saisie de l'utilisateur, date/heure, poste, et affichage en tableau.
 """
 
 import sys
@@ -10,11 +11,10 @@ import platform
 import subprocess
 import webbrowser
 import html
-import traceback
 from datetime import datetime
 from pathlib import Path
 
-# --- Importation optionnelle des bibliothèques ---
+# Try to import optional libs
 try:
     import usb.core
     import usb.util
@@ -38,16 +38,15 @@ except Exception:
     HAS_WMI = False
 
 
-# --- Fonctions utilitaires ---
 def now_iso():
     dt = datetime.now().astimezone()
     return dt.isoformat(), dt.strftime("%d/%m/%Y"), dt.strftime("%H:%M:%S"), dt.tzname()
+
 
 def s(x):
     return "" if x is None else str(x)
 
 
-# --- Scan avec PyUSB ---
 def scan_with_pyusb():
     results = []
     if not HAS_PYUSB:
@@ -55,59 +54,48 @@ def scan_with_pyusb():
     try:
         devices = usb.core.find(find_all=True)
         for dev in devices:
-            try:
-                vid = hex(dev.idVendor)
-                pid = hex(dev.idProduct)
-            except Exception:
-                vid = s(dev.idVendor)
-                pid = s(dev.idProduct)
             info = {
                 "backend": "pyusb",
-                "vendor_id": vid,
-                "product_id": pid,
-                "bus": getattr(dev, 'bus', ''),
-                "address": getattr(dev, 'address', ''),
+                "vendor_id": hex(dev.idVendor) if hasattr(dev, "idVendor") else "",
+                "product_id": hex(dev.idProduct) if hasattr(dev, "idProduct") else "",
+                "bus": getattr(dev, "bus", ""),
+                "address": getattr(dev, "address", ""),
                 "manufacturer": None,
                 "product": None,
                 "serial_number": None,
-                "raw": repr(dev)
             }
-            # Essai de lecture des chaînes
             try:
                 info["manufacturer"] = usb.util.get_string(dev, dev.iManufacturer) if dev.iManufacturer else None
             except Exception:
-                info["manufacturer"] = None
+                pass
             try:
                 info["product"] = usb.util.get_string(dev, dev.iProduct) if dev.iProduct else None
             except Exception:
-                info["product"] = None
+                pass
             try:
                 info["serial_number"] = usb.util.get_string(dev, dev.iSerialNumber) if dev.iSerialNumber else None
             except Exception:
-                info["serial_number"] = None
+                pass
             results.append(info)
     except Exception:
         pass
     return results
 
 
-# --- Linux ---
 def scan_linux():
     results = []
     if HAS_PYUDEV:
         try:
             ctx = pyudev.Context()
-            for device in ctx.list_devices(subsystem='usb', DEVTYPE='usb_device'):
-                info = {"backend": "pyudev"}
-                info.update({
-                    "vendor_id": device.get('ID_VENDOR_ID'),
-                    "product_id": device.get('ID_MODEL_ID'),
-                    "manufacturer": device.get('ID_VENDOR_FROM_DATABASE') or device.get('ID_VENDOR'),
-                    "product": device.get('ID_MODEL'),
-                    "serial_number": device.get('ID_SERIAL_SHORT') or device.get('ID_SERIAL'),
-                    "devnode": device.device_node,
-                    "sys_path": device.sys_path
-                })
+            for device in ctx.list_devices(subsystem="usb", DEVTYPE="usb_device"):
+                info = {
+                    "backend": "pyudev",
+                    "vendor_id": device.get("ID_VENDOR_ID"),
+                    "product_id": device.get("ID_MODEL_ID"),
+                    "manufacturer": device.get("ID_VENDOR_FROM_DATABASE") or device.get("ID_VENDOR"),
+                    "product": device.get("ID_MODEL"),
+                    "serial_number": device.get("ID_SERIAL_SHORT") or device.get("ID_SERIAL"),
+                }
                 results.append(info)
         except Exception:
             pass
@@ -116,10 +104,7 @@ def scan_linux():
         p = subprocess.run(["lsusb"], capture_output=True, text=True, check=False)
         if p.stdout:
             for line in p.stdout.strip().splitlines():
-                results.append({
-                    "backend": "lsusb",
-                    "line": line.strip()
-                })
+                results.append({"backend": "lsusb", "line": line.strip()})
     except Exception:
         pass
 
@@ -127,7 +112,6 @@ def scan_linux():
     return results
 
 
-# --- macOS ---
 def scan_macos():
     results = []
     try:
@@ -141,21 +125,18 @@ def scan_macos():
     return results
 
 
-# --- Windows ---
 def scan_windows():
     results = []
     if HAS_WMI:
         try:
             c = wmi.WMI()
             for dev in c.Win32_PnPEntity():
-                if dev.PNPClass and "USB" in (dev.PNPClass or "") or (dev.DeviceID and "USB" in dev.DeviceID):
+                if dev.PNPClass and "USB" in (dev.PNPClass or ""):
                     results.append({
                         "backend": "WMI",
                         "name": s(dev.Name),
                         "device_id": s(dev.DeviceID),
-                        "pnp_device_id": s(dev.PNPDeviceID),
-                        "manufacturer": s(dev.Manufacturer),
-                        "service": s(dev.Service)
+                        "manufacturer": s(dev.Manufacturer)
                     })
         except Exception:
             pass
@@ -172,7 +153,6 @@ def scan_windows():
     return results
 
 
-# --- Dispatcher ---
 def scan_all():
     system = platform.system()
     if system == "Linux":
@@ -185,94 +165,108 @@ def scan_all():
         return scan_with_pyusb()
 
 
-# --- Rapport HTML ---
-def generate_html_report(scan_records, scan_time_iso, scan_date, scan_time, scan_tz, filename):
+def generate_html_report(scan_records, info_user, filename):
     safe = html.escape
-    html_parts = []
-    html_parts.append(f"""<!doctype html>
+
+    html_head = f"""<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>USB-SCAN — rapport {safe(scan_time_iso)}</title>
+<title>USB-SCAN — Rapport</title>
 <style>
-  body {{ font-family: Arial, sans-serif; margin: 20px; background:#f9f9fb; color:#222 }}
-  h1 {{ color:#0b5394 }}
-  .meta {{ margin-bottom: 1em; }}
-  .record {{ margin-bottom: 1em; padding:8px; border-left: 4px solid #0b5394; background: #fff; }}
-  pre {{ background:#f7f7f9; padding:8px; overflow:auto; }}
+body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f6fa; color: #222; }}
+h1 {{ color: #0b5394; }}
+table {{ border-collapse: collapse; width: 100%; margin-top: 15px; }}
+th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }}
+th {{ background-color: #dbe9ff; }}
+.meta {{ background: #fff; padding: 10px; border: 1px solid #ccc; margin-bottom: 20px; }}
+footer {{ margin-top: 20px; font-size: 0.9rem; color: #666; text-align: center; }}
 </style>
 </head>
 <body>
-  <h1>USB-SCAN — Rapport</h1>
-  <div class="meta">
-    <strong>Date :</strong> {safe(scan_date)} &nbsp; <strong>Heure :</strong> {safe(scan_time)} &nbsp;
-    <strong>Fuseau :</strong> {safe(scan_tz)}<br>
-    <strong>Système :</strong> {safe(platform.system())} {safe(platform.release())}
-  </div>
-  <h2>Résumé : {len(scan_records)} périphérique(s) détecté(s)</h2>
-  <div>
-""")
+<h1>Rapport d’analyse USB</h1>
+
+<div class="meta">
+<strong>Nom :</strong> {safe(info_user['nom'])} {safe(info_user['prenom'])}<br>
+<strong>Poste :</strong> {safe(info_user['poste'])}<br>
+<strong>Date :</strong> {safe(info_user['date'])}<br>
+<strong>Heure :</strong> {safe(info_user['heure'])}<br>
+<strong>OS :</strong> {safe(platform.system())} {safe(platform.release())}<br>
+<strong>Ports USB détectés :</strong> {len(scan_records)}
+</div>
+
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Backend</th>
+<th>Fabricant</th>
+<th>Produit</th>
+<th>Numéro de série</th>
+<th>Vendor ID</th>
+<th>Product ID</th>
+</tr>
+</thead>
+<tbody>
+"""
+
+    rows = ""
     for i, rec in enumerate(scan_records, 1):
-        html_parts.append(f'<div class="record"><strong>#{i} — backend: {safe(s(rec.get("backend")))}</strong><br>')
-        for k in ("vendor_id","product_id","manufacturer","product","serial_number","name",
-                  "device_id","pnp_device_id","service","devnode","sys_path","bus","address"):
-            if k in rec and rec[k]:
-                html_parts.append(f'<div><strong>{safe(k)}:</strong> {safe(s(rec[k]))}</div>')
-        if "line" in rec:
-            html_parts.append("<div><strong>lsusb:</strong> <code>" + safe(rec["line"]) + "</code></div>")
-        if "text" in rec:
-            html_parts.append("<div><strong>Sortie texte:</strong><pre>" + safe(rec["text"]) + "</pre></div>")
-        if "raw" in rec:
-            html_parts.append("<div><strong>Raw:</strong> <code>" + safe(rec["raw"]) + "</code></div>")
-        html_parts.append("</div>")
-    html_parts.append(f"""
-  </div>
-  <footer style="margin-top:20px; font-size:0.9rem; color:#666">
-    Rapport généré le {safe(scan_time_iso)}
-  </footer>
+        rows += f"""
+<tr>
+<td>{i}</td>
+<td>{safe(s(rec.get('backend')))}</td>
+<td>{safe(s(rec.get('manufacturer')))}</td>
+<td>{safe(s(rec.get('product')))}</td>
+<td>{safe(s(rec.get('serial_number')))}</td>
+<td>{safe(s(rec.get('vendor_id')))}</td>
+<td>{safe(s(rec.get('product_id')))}</td>
+</tr>
+"""
+
+    html_end = f"""
+</tbody>
+</table>
+<footer>
+Généré automatiquement le {safe(info_user['date'])} à {safe(info_user['heure'])}.
+</footer>
 </body>
 </html>
-""")
-    Path(filename).write_text("".join(html_parts), encoding="utf-8")
+"""
+
+    Path(filename).write_text(html_head + rows + html_end, encoding="utf-8")
     return filename
 
 
-# --- Programme principal ---
 def main():
-    print("="*60)
-    print(" USB-SCAN — Analyse des périphériques USB ")
-    print("="*60)
-    print(f"Système détecté : {platform.system()} {platform.release()}")
-    print("Remarque : certaines informations peuvent nécessiter des droits administrateur.\n")
+    print("=== USB-SCAN — Rapport d'analyse USB ===\n")
 
-    while True:
-        iso, date_str, time_str, tzname = now_iso()
-        print(f"Analyse en cours ({date_str} {time_str} {tzname})...")
-        scan_data = scan_all()
-        filename = f"usb_scan_report_{iso.replace(':', '-')}.html"
-        generate_html_report(scan_data, iso, date_str, time_str, tzname, filename)
-        print(f"\n✅ Analyse terminée : {len(scan_data)} périphérique(s) détecté(s).")
-        print(f"📄 Rapport enregistré sous : {filename}")
+    nom = input("Nom de l'utilisateur : ").strip()
+    prenom = input("Prénom de l'utilisateur : ").strip()
+    poste = input("Nom ou numéro du poste : ").strip()
+    iso, date_str, time_str, tzname = now_iso()
 
-        try:
-            webbrowser.open(str(Path(filename).absolute().as_uri()))
-            print("🌐 Ouverture du rapport dans le navigateur…")
-        except Exception:
-            print("⚠️ Impossible d’ouvrir le navigateur automatiquement.")
+    print("\nAnalyse en cours, veuillez patienter...\n")
+    scan_data = scan_all()
 
-        answer = input("\nSouhaitez-vous refaire une analyse ? (o/n) : ").strip().lower()
-        if answer in ("n", "no", "non"):
-            print("\nMerci d’avoir utilisé USB-SCAN. À bientôt ! 👋")
-            break
+    info_user = {
+        "nom": nom,
+        "prenom": prenom,
+        "poste": poste,
+        "date": date_str,
+        "heure": time_str,
+    }
+
+    safe_ts = iso.replace(":", "-")
+    filename = f"usb_scan_report_{safe_ts}.html"
+    outpath = generate_html_report(scan_data, info_user, filename)
+
+    print(f"Analyse terminée. {len(scan_data)} ports USB détectés.")
+    print(f"Rapport généré : {outpath}")
+    webbrowser.open(str(Path(outpath).absolute().as_uri()))
+
+    input("\nAppuyez sur Entrée pour fermer le programme...")
 
 
-# --- Lancement avec sécurité (empêche la fermeture immédiate) ---
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print("\n❌ Une erreur est survenue pendant l'exécution :")
-        traceback.print_exc()
-    finally:
-        print("\nAppuie sur Entrée pour fermer...")
-        input()
+    main()
