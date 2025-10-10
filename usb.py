@@ -10,6 +10,7 @@ import platform
 import subprocess
 import webbrowser
 import html
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -265,10 +266,13 @@ def main():
             break
 
 
-# --- Lancement ---
+# --- Lancement avec sécurité (empêche la fermeture immédiate) ---
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print("\n❌ Erreur inattendue :", e)
-    input("\nAppuie sur Entrée pour fermer...")
+        print("\n❌ Une erreur est survenue pendant l'exécution :")
+        traceback.print_exc()
+    finally:
+        print("\nAppuie sur Entrée pour fermer...")
+        input()
