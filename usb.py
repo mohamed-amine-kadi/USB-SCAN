@@ -131,6 +131,7 @@ def scan_windows():
         try:
             c = wmi.WMI()
             for dev in c.Win32_PnPEntity():
+                print("test USB")
                 if dev.PNPClass and "USB" in (dev.PNPClass or ""):
                     results.append({
                         "backend": "WMI",
