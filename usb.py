@@ -13,7 +13,7 @@ import html
 from datetime import datetime
 from pathlib import Path
 
-# Try to import optional libs
+# --- Importation optionnelle des bibliothèques ---
 try:
     import usb.core
     import usb.util
@@ -28,7 +28,6 @@ except Exception:
     HAS_PYUDEV = False
 
 try:
-    # wmi works on Windows (pip install wmi)
     if platform.system() == "Windows":
         import wmi
         HAS_WMI = True
@@ -37,16 +36,17 @@ try:
 except Exception:
     HAS_WMI = False
 
-# Utility: timestamp with timezone-aware local time
+
+# --- Fonctions utilitaires ---
 def now_iso():
     dt = datetime.now().astimezone()
     return dt.isoformat(), dt.strftime("%d/%m/%Y"), dt.strftime("%H:%M:%S"), dt.tzname()
 
-# Helper: safe string
 def s(x):
     return "" if x is None else str(x)
 
-# Collect info via pyusb if available (vendor/product, serial, manufacturer, product)
+
+# --- Scan avec PyUSB ---
 def scan_with_pyusb():
     results = []
     if not HAS_PYUSB:
@@ -71,7 +71,7 @@ def scan_with_pyusb():
                 "serial_number": None,
                 "raw": repr(dev)
             }
-            # Try to fetch strings (can fail w/o permissions)
+            # Essai de lecture des chaînes
             try:
                 info["manufacturer"] = usb.util.get_string(dev, dev.iManufacturer) if dev.iManufacturer else None
             except Exception:
@@ -89,10 +89,10 @@ def scan_with_pyusb():
         pass
     return results
 
-# Linux: use pyudev and/or lsusb
+
+# --- Linux ---
 def scan_linux():
     results = []
-    # pyudev detailed enumeration (requires pyudev)
     if HAS_PYUDEV:
         try:
             ctx = pyudev.Context()
@@ -111,12 +111,10 @@ def scan_linux():
         except Exception:
             pass
 
-    # fallback to lsusb (human readable). lsusb must be installed
     try:
         p = subprocess.run(["lsusb"], capture_output=True, text=True, check=False)
         if p.stdout:
             for line in p.stdout.strip().splitlines():
-                # Example line: Bus 002 Device 003: ID 8087:0024 Intel Corp. Integrated Rate Matching Hub
                 results.append({
                     "backend": "lsusb",
                     "line": line.strip()
@@ -124,11 +122,11 @@ def scan_linux():
     except Exception:
         pass
 
-    # add pyusb devices
     results.extend(scan_with_pyusb())
     return results
 
-# macOS: use system_profiler SPUSBDataType
+
+# --- macOS ---
 def scan_macos():
     results = []
     try:
@@ -141,13 +139,13 @@ def scan_macos():
     results.extend(scan_with_pyusb())
     return results
 
-# Windows: use WMI if available, otherwise wmic commands
+
+# --- Windows ---
 def scan_windows():
     results = []
     if HAS_WMI:
         try:
             c = wmi.WMI()
-            # Query USB PnP entities
             for dev in c.Win32_PnPEntity():
                 if dev.PNPClass and "USB" in (dev.PNPClass or "") or (dev.DeviceID and "USB" in dev.DeviceID):
                     results.append({
@@ -161,19 +159,19 @@ def scan_windows():
         except Exception:
             pass
 
-    # fallback to wmic (deprecated on newer windows but often present)
     try:
-        p = subprocess.run(["wmic", "path", "Win32_USBControllerDevice", "get", "Dependent"], capture_output=True, text=True, check=False)
+        p = subprocess.run(["wmic", "path", "Win32_USBControllerDevice", "get", "Dependent"],
+                           capture_output=True, text=True, check=False)
         if p.stdout:
             results.append({"backend": "wmic_controller_device", "text": p.stdout})
     except Exception:
         pass
 
-    # add pyusb
     results.extend(scan_with_pyusb())
     return results
 
-# Generic scanner dispatcher
+
+# --- Dispatcher ---
 def scan_all():
     system = platform.system()
     if system == "Linux":
@@ -183,10 +181,10 @@ def scan_all():
     elif system == "Windows":
         return scan_windows()
     else:
-        # Other OS: try pyusb only
         return scan_with_pyusb()
 
-# Generate HTML report for one scan
+
+# --- Rapport HTML ---
 def generate_html_report(scan_records, scan_time_iso, scan_date, scan_time, scan_tz, filename):
     safe = html.escape
     html_parts = []
@@ -199,81 +197,78 @@ def generate_html_report(scan_records, scan_time_iso, scan_date, scan_time, scan
   body {{ font-family: Arial, sans-serif; margin: 20px; background:#f9f9fb; color:#222 }}
   h1 {{ color:#0b5394 }}
   .meta {{ margin-bottom: 1em; }}
-  table {{ border-collapse: collapse; width: 100%; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,0.04) }}
-  th, td {{ border: 1px solid #e2e2e2; padding: 8px; text-align:left; font-size: 0.95rem }}
-  th {{ background: #f2f6fb; }}
+  .record {{ margin-bottom: 1em; padding:8px; border-left: 4px solid #0b5394; background: #fff; }}
   pre {{ background:#f7f7f9; padding:8px; overflow:auto; }}
-  .record { margin-bottom: 1em; padding:8px; border-left: 4px solid #0b5394; background: #fff; }
 </style>
 </head>
 <body>
   <h1>USB-SCAN — Rapport</h1>
   <div class="meta">
-    <strong>Date :</strong> {safe(scan_date)} &nbsp; <strong>Heure :</strong> {safe(scan_time)} &nbsp; <strong>Timezone :</strong> {safe(scan_tz)}<br>
-    <strong>Système :</strong> {safe(platform.system())} {safe(platform.release())} ({safe(platform.platform())})
+    <strong>Date :</strong> {safe(scan_date)} &nbsp; <strong>Heure :</strong> {safe(scan_time)} &nbsp;
+    <strong>Fuseau :</strong> {safe(scan_tz)}<br>
+    <strong>Système :</strong> {safe(platform.system())} {safe(platform.release())}
   </div>
-  <h2>Résumé des éléments trouvés : {len(scan_records)} entrées</h2>
+  <h2>Résumé : {len(scan_records)} périphérique(s) détecté(s)</h2>
   <div>
 """)
-    # For each record, render depending on its keys
     for i, rec in enumerate(scan_records, 1):
-        html_parts.append(f'<div class="record"><strong>Entrée #{i} — backend: {safe(s(rec.get("backend")) )}</strong><br>')
-        # Pretty print some common fields
-        for k in ("vendor_id","product_id","manufacturer","product","serial_number","name","device_id","pnp_device_id","service","devnode","sys_path","bus","address"):
+        html_parts.append(f'<div class="record"><strong>#{i} — backend: {safe(s(rec.get("backend")))}</strong><br>')
+        for k in ("vendor_id","product_id","manufacturer","product","serial_number","name",
+                  "device_id","pnp_device_id","service","devnode","sys_path","bus","address"):
             if k in rec and rec[k]:
                 html_parts.append(f'<div><strong>{safe(k)}:</strong> {safe(s(rec[k]))}</div>')
-        # raw text or special 'line' or 'text'
         if "line" in rec:
-            html_parts.append("<div><strong>lsusb line:</strong> <code>" + safe(rec["line"]) + "</code></div>")
+            html_parts.append("<div><strong>lsusb:</strong> <code>" + safe(rec["line"]) + "</code></div>")
         if "text" in rec:
-            html_parts.append("<div><strong>Text output:</strong><pre>" + safe(rec["text"]) + "</pre></div>")
+            html_parts.append("<div><strong>Sortie texte:</strong><pre>" + safe(rec["text"]) + "</pre></div>")
         if "raw" in rec:
-            html_parts.append("<div><strong>raw:</strong> <code>" + safe(rec["raw"]) + "</code></div>")
-        html_parts.append("</div>")  # record
-    html_parts.append("""
+            html_parts.append("<div><strong>Raw:</strong> <code>" + safe(rec["raw"]) + "</code></div>")
+        html_parts.append("</div>")
+    html_parts.append(f"""
   </div>
   <footer style="margin-top:20px; font-size:0.9rem; color:#666">
-    Généré par USB-SCAN — {time_iso}
+    Rapport généré le {safe(scan_time_iso)}
   </footer>
 </body>
 </html>
-""".format(time_iso=safe(scan_time_iso)))
+""")
     Path(filename).write_text("".join(html_parts), encoding="utf-8")
     return filename
 
-# Main interactive loop
+
+# --- Programme principal ---
 def main():
-    print("USB-SCAN — Analyse des ports USB et génération d'un rapport HTML.")
-    print("Détection de l'OS:", platform.system())
-    print("Remarque: certaines informations (serial/manufacturer) peuvent nécessiter des permissions élevées.")
-    scans_done = 0
+    print("="*60)
+    print(" USB-SCAN — Analyse des périphériques USB ")
+    print("="*60)
+    print(f"Système détecté : {platform.system()} {platform.release()}")
+    print("Remarque : certaines informations peuvent nécessiter des droits administrateur.\n")
+
     while True:
         iso, date_str, time_str, tzname = now_iso()
-        print(f"\nLancement de l'analyse — {date_str} {time_str} ({tzname}) ...")
+        print(f"Analyse en cours ({date_str} {time_str} {tzname})...")
         scan_data = scan_all()
-        scans_done += 1
-        # Build filename with timestamp
-        safe_ts = iso.replace(":", "-")
-        filename = f"usb_scan_report_{safe_ts}.html"
-        outpath = generate_html_report(scan_data, iso, date_str, time_str, tzname, filename)
-        print(f"Analyse terminée. {len(scan_data)} éléments trouvés.")
-        print(f"Rapport écrit dans : {outpath}")
+        filename = f"usb_scan_report_{iso.replace(':', '-')}.html"
+        generate_html_report(scan_data, iso, date_str, time_str, tzname, filename)
+        print(f"\n✅ Analyse terminée : {len(scan_data)} périphérique(s) détecté(s).")
+        print(f"📄 Rapport enregistré sous : {filename}")
+
         try:
-            webbrowser.open(str(Path(outpath).absolute().as_uri()))
+            webbrowser.open(str(Path(filename).absolute().as_uri()))
+            print("🌐 Ouverture du rapport dans le navigateur…")
         except Exception:
-            # fallback open local path
-            try:
-                webbrowser.open(str(Path(outpath).absolute()))
-            except Exception:
-                pass
+            print("⚠️ Impossible d’ouvrir le navigateur automatiquement.")
 
-        # Demander à l'utilisateur s'il souhaite relancer
-        answer = input("Souhaitez-vous faire une autre analyse ? (o/n) : ").strip().lower()
+        answer = input("\nSouhaitez-vous refaire une analyse ? (o/n) : ").strip().lower()
         if answer in ("n", "no", "non"):
-            print("Arrêt demandé — au revoir.")
+            print("\nMerci d’avoir utilisé USB-SCAN. À bientôt ! 👋")
             break
-        else:
-            print("Nouvelle analyse demandée — relance...")
 
+
+# --- Lancement ---
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("\n❌ Erreur inattendue :", e)
+    input("\nAppuie sur Entrée pour fermer...")
